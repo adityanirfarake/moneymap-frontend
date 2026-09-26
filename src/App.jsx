@@ -225,7 +225,7 @@ function WishlistPlanner({ monthlySalary, savingsRate, userKey }) {
     <form className="wishlist-form" onSubmit={addWish}>
       <label>Product or item<input value={product} onChange={(event) => setProduct(event.target.value)} maxLength="80" placeholder="e.g. Headphones" /></label>
       <label>Price<input type="number" min="1" step="1" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="15000" /></label>
-      <label>Salary share<input type="number" min="1" max={Math.max(1, Number(savingsRate || 0))} step="1" value={sharePercent} onChange={(event) => setSharePercent(event.target.value)} /><span className="input-suffix">%</span></label>
+      <label>Salary share (%)<input type="number" min="1" max={Math.max(1, Number(savingsRate || 0))} step="1" value={sharePercent} onChange={(event) => setSharePercent(event.target.value)} /><span className="input-suffix">%</span></label>
       <button className="primary-button" type="submit">Add to wishlist</button>
     </form>
     <p className="wishlist-budget-note">Your wishlist plans share the {savingsRate}% savings target ({money(monthlySalary * Number(savingsRate || 0) / 100)} per month). {availablePercent}% remains available.</p>
