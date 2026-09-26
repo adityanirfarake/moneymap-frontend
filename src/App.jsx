@@ -36,7 +36,11 @@ function App() {
       <Route path="/transactions" element={<TransactionsPage />} /><Route path="/transactions/new" element={<TransactionFormPage />} />
       <Route path="/transactions/:id/edit" element={<TransactionFormPage />} /><Route path="/money-map" element={<MoneyMapPage />} /><Route path="/saving-map" element={<SavingMapPageWithGoal />} /><Route path="/profile" element={<ProfilePage />} />
     </Route>
-  </Routes></BrowserRouter></div>;
+  </Routes></BrowserRouter><BuildFooter /></div>;
+}
+
+function BuildFooter() {
+  return <footer className="build-footer">Deployed commit <code>{import.meta.env.VITE_GIT_COMMIT || 'local'}</code></footer>;
 }
 
 function AuthPage({ mode, onAuth }) {
