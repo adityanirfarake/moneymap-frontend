@@ -77,7 +77,7 @@ function GettingStartedPage() {
   return <div className="getting-started-page">
     <header className="getting-started-hero">
       <p className="eyebrow">Getting started</p>
-      <h1>Welcome to MoneyMap <span aria-hidden="true">👋</span></h1>
+      <h1>Welcome to MoneyMap</h1>
       <p>Track your money. Understand your spending. Plan your future.</p>
       <button className="primary-button" type="button" onClick={getStarted}>Get Started</button>
     </header>
