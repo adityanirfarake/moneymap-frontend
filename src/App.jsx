@@ -113,7 +113,32 @@ function DashboardPage() {
 }
 
 function BalanceAlert({ balance }) { const isNegative = balance < 0; return <div className="balance-alert" role="alert"><span className="balance-alert-icon">!</span><div><strong>{isNegative ? 'Your current balance is negative.' : 'Your current balance is zero.'}</strong><p>{isNegative ? 'Add income or review your expenses to bring your balance back up.' : 'Consider adding income or keeping new expenses low for now.'}</p></div></div>; }
-function SavingGoalDashboard({ goal, saved }) { if (!goal) return <div className="saving-goal-dashboard empty-goal"><div><p className="eyebrow">This month</p><strong>No saving goal set yet</strong><span>Choose an amount to protect before month end.</span></div><Link className="secondary-button" to="/saving-map">Set a goal</Link></div>; const progress = Math.min(100, Math.max(0, (saved / goal) * 100)); const remaining = Math.max(0, goal - saved); return <div className="saving-goal-dashboard"><div className="goal-copy"><p className="eyebrow">This month’s goal</p><strong>Save {money(goal)} by month end</strong><span>{remaining ? `${money(remaining)} left to reach your goal` : 'Goal reached. Great work.'}</span></div><div className="goal-progress"><div><span>Progress</span><strong>{Math.round(progress)}%</strong></div><div className="goal-progress-track"><span style={{ width: `${progress}%` }} /></div></div><Link className="secondary-button" to="/saving-map">View plan</Link></div>; }
+function SavingGoalDashboard({ goal, saved }) {
+  const [showCelebration, setShowCelebration] = useState(false);
+  const progress = goal > 0 ? Math.min(100, Math.max(0, (saved / goal) * 100)) : 0;
+  const goalReached = goal > 0 && saved >= goal;
+
+  useEffect(() => {
+    if (!goalReached) return undefined;
+    const key = `moneymap_goal_celebrated_${goal}`;
+    if (sessionStorage.getItem(key)) return undefined;
+
+    sessionStorage.setItem(key, 'true');
+    setShowCelebration(true);
+    const timeout = window.setTimeout(() => setShowCelebration(false), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [goal, goalReached]);
+
+  if (!goal) return <div className="saving-goal-dashboard empty-goal"><div><p className="eyebrow">This month</p><strong>No saving goal set yet</strong><span>Choose an amount to protect before month end.</span></div><Link className="secondary-button" to="/saving-map">Set a goal</Link></div>;
+
+  const remaining = Math.max(0, goal - saved);
+  return <div className={`saving-goal-dashboard${goalReached ? ' goal-complete' : ''}`}>
+    {showCelebration && <div className="goal-confetti" aria-hidden="true">{[-132, -108, -84, -60, -36, -12, 12, 36, 60, 84, 108, 132, -120, -72, -24, 24, 72, 120].map((offset, index) => <span key={index} style={{ '--confetti-x': `${offset}px`, '--confetti-delay': `${(index % 6) * 45}ms`, '--confetti-hue': `${(index * 37) % 360}deg` }} />)}</div>}
+    <div className="goal-copy"><p className="eyebrow">This month’s goal</p><strong>Save {money(goal)} by month end</strong><span>{remaining ? `${money(remaining)} left to reach your goal` : 'Goal reached. Great work.'}</span>{goalReached && <span className="goal-achieved" role="status">🎉 Goal achieved — you did it!</span>}</div>
+    <div className="goal-progress"><div><span>Progress</span><strong>{Math.round(progress)}%</strong></div><div className="goal-progress-track"><span style={{ width: `${progress}%` }} /></div></div>
+    <Link className="secondary-button" to="/saving-map">View plan</Link>
+  </div>;
+}
 function TransactionList({ transactions, onDelete }) { if (!transactions.length) return <div className="empty-state">No transactions yet. Add your first income or expense to begin.</div>; return <div className="transaction-list">{transactions.map((transaction) => <div className="transaction-row" key={transaction.id}><div className={`transaction-icon ${transaction.type}`}>{transaction.type === 'income' ? '↑' : '↓'}</div><div className="transaction-info"><strong>{transaction.category}</strong><span>{transaction.description || 'No description'} · {formatDate(transaction.date)}</span></div><strong className={transaction.type === 'income' ? 'amount-income' : 'amount-expense'}>{transaction.type === 'income' ? '+' : '-'}{money(transaction.amount)}</strong>{onDelete && <><Link className="row-action" to={`/transactions/${transaction.id}/edit`}>Edit</Link><button className="row-action delete-action" onClick={() => onDelete(transaction.id)}>Delete</button></>}</div>)}</div>; }
 function CategoryPanel({ breakdown }) { const [selectedCategory, setSelectedCategory] = useState(null); const max = breakdown[0]?.amount || 1; function selectCategory(category) { setSelectedCategory((currentCategory) => currentCategory === category ? null : category); } function handleKeyDown(event, category) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCategory(category); } } return <div className="panel category-panel"><div className="panel-heading"><div><p className="eyebrow">Where it goes</p><h2>Expense breakdown</h2></div><Link to="/money-map">Details</Link></div>{breakdown.length ? <div className="category-bars">{breakdown.slice(0, 5).map((item) => <div className={`category-item ${selectedCategory === item.category ? 'selected' : ''}`} key={item.category} role="button" tabIndex="0" onClick={() => selectCategory(item.category)} onKeyDown={(event) => handleKeyDown(event, item.category)}><div><span>{item.category}</span><strong>{money(item.amount)}</strong></div><div className="bar-track"><span style={{ width: `${(item.amount / max) * 100}%` }} /></div></div>)}</div> : <div className="empty-state">Your category chart will appear here.</div>}</div>; }
 
