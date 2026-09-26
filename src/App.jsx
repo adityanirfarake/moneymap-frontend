@@ -177,11 +177,78 @@ function SavingGoalPanel() {
   return <section className="panel saving-goal-panel"><div className="saving-goal-heading"><div><p className="eyebrow">This month</p><h2>Set a saving goal</h2><p>Choose the amount you want to protect before spending the rest.</p></div><label>Monthly saving goal<input type="number" min="0" step="100" value={savingGoal} onChange={updateGoal} placeholder="10000" /></label></div>{error && <p className="form-error">{error}</p>}{goalAtRisk && <div className="saving-goal-alert" role="alert"><span>!</span><div><strong>You might miss your saving goal.</strong><p>Spending is {money(shortfall)} beyond your safe limit. Review flexible categories before adding more expenses.</p></div></div>}</section>;
 }
 
+function WishlistPlanner({ monthlySalary, savingsRate, userKey }) {
+  const storageKey = `moneymap_wishlist_${encodeURIComponent(String(userKey).toLowerCase())}`;
+  const [items, setItems] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      return Array.isArray(stored) ? stored : [];
+    } catch {
+      return [];
+    }
+  });
+  const [product, setProduct] = useState('');
+  const [price, setPrice] = useState('');
+  const [sharePercent, setSharePercent] = useState('5');
+  const [error, setError] = useState('');
+  const allocatedPercent = items.reduce((total, item) => total + Number(item.sharePercent || 0), 0);
+  const availablePercent = Math.max(0, Number(savingsRate || 0) - allocatedPercent);
+
+  useEffect(() => {
+    localStorage.setItem(storageKey, JSON.stringify(items));
+  }, [items, storageKey]);
+
+  function addWish(event) {
+    event.preventDefault();
+    setError('');
+    const name = product.trim();
+    const amount = Number(price);
+    const percent = Number(sharePercent);
+    if (!name) return setError('Enter the product you want to save for.');
+    if (!Number.isFinite(amount) || amount <= 0) return setError('Enter a price greater than zero.');
+    if (monthlySalary <= 0) return setError('Enter your monthly salary above to calculate a purchase plan.');
+    if (!Number.isFinite(percent) || percent <= 0) return setError('Choose a salary percentage greater than zero.');
+    if (allocatedPercent + percent > Number(savingsRate || 0)) return setError(`Your wishlist plans cannot use more than your ${savingsRate}% monthly savings target. ${availablePercent}% is available.`);
+
+    setItems((current) => [...current, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, product: name, price: amount, sharePercent: percent }]);
+    setProduct('');
+    setPrice('');
+  }
+
+  function removeWish(id) {
+    setItems((current) => current.filter((item) => item.id !== id));
+  }
+
+  return <section className="panel wishlist-panel" aria-labelledby="wishlist-heading">
+    <div className="panel-heading"><div><p className="eyebrow">Plan a purchase</p><h2 id="wishlist-heading">Your wishlist</h2></div><span className="roadmap-note">{money(monthlySalary * allocatedPercent / 100)} / month planned · {allocatedPercent}% of salary</span></div>
+    <p className="wishlist-intro">Add something you want to buy. We’ll estimate a monthly contribution and timeline from your salary. Each plan assumes you keep income and prices steady.</p>
+    <form className="wishlist-form" onSubmit={addWish}>
+      <label>Product or item<input value={product} onChange={(event) => setProduct(event.target.value)} maxLength="80" placeholder="e.g. Headphones" /></label>
+      <label>Price<input type="number" min="1" step="1" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="15000" /></label>
+      <label>Salary share<input type="number" min="1" max={Math.max(1, Number(savingsRate || 0))} step="1" value={sharePercent} onChange={(event) => setSharePercent(event.target.value)} /><span className="input-suffix">%</span></label>
+      <button className="primary-button" type="submit">Add to wishlist</button>
+    </form>
+    <p className="wishlist-budget-note">Your wishlist plans share the {savingsRate}% savings target ({money(monthlySalary * Number(savingsRate || 0) / 100)} per month). {availablePercent}% remains available.</p>
+    {error && <p className="form-error" role="alert">{error}</p>}
+    {items.length ? <div className="wishlist-list" aria-live="polite">{items.map((item) => {
+      const monthlyContribution = monthlySalary * Number(item.sharePercent || 0) / 100;
+      const months = monthlyContribution > 0 ? Math.ceil(Number(item.price) / monthlyContribution) : null;
+      return <article className="wishlist-item" key={item.id}>
+        <div className="wishlist-item-name"><strong>{item.product}</strong><span>Price {money(item.price)}</span></div>
+        <div className="wishlist-plan"><span>Set aside each month</span><strong>{money(monthlyContribution)} <small>({item.sharePercent}% of salary)</small></strong></div>
+        <div className="wishlist-timeline"><span>Estimated time</span><strong>{months ? `${months} ${months === 1 ? 'month' : 'months'}` : 'Enter salary'}</strong></div>
+        <button className="wishlist-remove" type="button" onClick={() => removeWish(item.id)} aria-label={`Remove ${item.product} from wishlist`}>Remove</button>
+      </article>;
+    })}</div> : <p className="wishlist-empty">Your wishlist is empty. Add your first item to get a savings plan.</p>}
+  </section>;
+}
+
 function SavingMapPage() {
+  const { user } = useOutletContext();
   const [summary, setSummary] = useState(null); const [breakdown, setBreakdown] = useState([]); const [salary, setSalary] = useState(''); const [savingsRate, setSavingsRate] = useState('20'); const [error, setError] = useState('');
   useEffect(() => { Promise.all([apiRequest('/dashboard/summary'), apiRequest('/dashboard/category-breakdown')]).then(([summaryData, breakdownData]) => { setSummary(summaryData.summary); setSalary(String(summaryData.summary.income || '')); setBreakdown(breakdownData.breakdown); }).catch((requestError) => setError(requestError.message)); }, []);
   const monthlySalary = Number(salary) || 0; const targetSavings = monthlySalary * ((Number(savingsRate) || 0) / 100); const safeToSpend = Math.max(0, monthlySalary - targetSavings); const rows = breakdown.map((item) => { const isProtected = protectedBudgetCategories.includes(item.category); const recommended = isProtected ? item.amount : monthlySalary * (budgetRates[item.category] || 0.05); const overage = isProtected ? 0 : Math.max(0, item.amount - recommended); return { ...item, recommended, overage, isProtected, progress: recommended ? Math.min(100, (item.amount / recommended) * 100) : 0 }; }); const possibleSavings = rows.reduce((total, item) => total + item.overage, 0);
-  return <><PageHeader eyebrow="A plan for your money" title="Saving Map" /><section className="panel planner-controls"><div><p className="eyebrow">Set your direction</p><h2>Build a monthly roadmap</h2><p className="planner-copy">Your transactions provide the reality. These two inputs shape a more useful plan.</p></div><div className="planner-inputs"><label>Monthly salary<input type="number" min="0" step="100" value={salary} onChange={(event) => setSalary(event.target.value)} placeholder="50000" /></label><label>Savings target<input type="number" min="0" max="90" step="1" value={savingsRate} onChange={(event) => setSavingsRate(event.target.value)} /><span className="input-suffix">%</span></label></div></section>{error && <p className="form-error">{error}</p>}<section className="roadmap-summary"><article><span>Save first</span><strong>{money(targetSavings)}</strong><small>{savingsRate}% of salary</small></article><article><span>Safe to spend</span><strong>{money(safeToSpend)}</strong><small>after planned savings</small></article><article><span>Possible extra savings</span><strong>{money(possibleSavings)}</strong><small>from flexible categories</small></article></section><div className="panel roadmap-panel"><div className="panel-heading"><div><p className="eyebrow">Actual versus recommended</p><h2>Category roadmap</h2></div><span className="roadmap-note">Rent is fixed. Health comes first. Miscellaneous stays low priority.</span></div>{rows.length ? rows.map((item) => <div className="roadmap-row" key={item.category}><div className="roadmap-label"><strong>{item.category}</strong><span>{money(item.amount)} spent</span></div><div className="roadmap-track"><span className={item.overage ? 'over-budget' : ''} style={{ width: `${item.progress}%` }} /></div><div className="roadmap-budget"><span>{item.isProtected ? 'Protected need' : `Target ${money(item.recommended)}`}</span>{item.category === 'Health' ? <strong className="protected-budget">Get well soon</strong> : item.category === 'Rent' ? <strong className="protected-budget">Fixed need</strong> : item.category === 'Miscellaneous' && item.overage ? <strong className="low-priority-budget">Save here first</strong> : item.overage ? <strong>Save {money(item.overage)}</strong> : <strong className="on-track">On track</strong>}</div></div>) : <div className="empty-state">Add expense transactions to generate your saving roadmap.</div>}</div></>;
+  return <><PageHeader eyebrow="A plan for your money" title="Saving Map" /><section className="panel planner-controls"><div><p className="eyebrow">Set your direction</p><h2>Build a monthly roadmap</h2><p className="planner-copy">Your transactions provide the reality. These two inputs shape a more useful plan.</p></div><div className="planner-inputs"><label>Monthly salary<input type="number" min="0" step="100" value={salary} onChange={(event) => setSalary(event.target.value)} placeholder="50000" /></label><label>Savings target<input type="number" min="0" max="90" step="1" value={savingsRate} onChange={(event) => setSavingsRate(event.target.value)} /><span className="input-suffix">%</span></label></div></section>{error && <p className="form-error">{error}</p>}<section className="roadmap-summary"><article><span>Save first</span><strong>{money(targetSavings)}</strong><small>{savingsRate}% of salary</small></article><article><span>Safe to spend</span><strong>{money(safeToSpend)}</strong><small>after planned savings</small></article><article><span>Possible extra savings</span><strong>{money(possibleSavings)}</strong><small>from flexible categories</small></article></section><WishlistPlanner monthlySalary={monthlySalary} savingsRate={savingsRate} userKey={user.id ?? user.username} /><div className="panel roadmap-panel"><div className="panel-heading"><div><p className="eyebrow">Actual versus recommended</p><h2>Category roadmap</h2></div><span className="roadmap-note">Rent is fixed. Health comes first. Miscellaneous stays low priority.</span></div>{rows.length ? rows.map((item) => <div className="roadmap-row" key={item.category}><div className="roadmap-label"><strong>{item.category}</strong><span>{money(item.amount)} spent</span></div><div className="roadmap-track"><span className={item.overage ? 'over-budget' : ''} style={{ width: `${item.progress}%` }} /></div><div className="roadmap-budget"><span>{item.isProtected ? 'Protected need' : `Target ${money(item.recommended)}`}</span>{item.category === 'Health' ? <strong className="protected-budget">Get well soon</strong> : item.category === 'Rent' ? <strong className="protected-budget">Fixed need</strong> : item.category === 'Miscellaneous' && item.overage ? <strong className="low-priority-budget">Save here first</strong> : item.overage ? <strong>Save {money(item.overage)}</strong> : <strong className="on-track">On track</strong>}</div></div>) : <div className="empty-state">Add expense transactions to generate your saving roadmap.</div>}</div></>;
 }
 
 function ProfilePage() { const { user } = useOutletContext(); const [clearing, setClearing] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); async function clearHistory() { if (!window.confirm('Start fresh? This will permanently delete all of your transactions but keep your account.')) return; setClearing(true); setMessage(''); setError(''); try { const result = await apiRequest('/transactions', { method: 'DELETE' }); setMessage(`${result.deletedCount} transaction${result.deletedCount === 1 ? '' : 's'} cleared. You are ready for a fresh month.`); } catch (requestError) { setError(requestError.message); } finally { setClearing(false); } } return <><PageHeader eyebrow="Your account" title="Profile" /><div className="panel profile-panel"><div className="profile-avatar">{user.username[0].toUpperCase()}</div><div><p className="eyebrow">Signed in as</p><h2>{user.username}</h2><p>{user.email}</p></div></div><div className="panel reset-panel"><div><p className="eyebrow">New month</p><h2>Start fresh</h2><p>Clear your transaction history while keeping your account and login.</p></div><button className="danger-button" type="button" onClick={clearHistory} disabled={clearing}>{clearing ? 'Clearing...' : 'Clear transaction history'}</button>{message && <p className="success-message">{message}</p>}{error && <p className="form-error">{error}</p>}</div></>; }
